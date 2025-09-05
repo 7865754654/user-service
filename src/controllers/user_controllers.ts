@@ -6,53 +6,70 @@ import dotenv from "dotenv";
 
 dotenv.config();
 const userService = new UserService();
-
+  // Регистрация нового пользователя
 export class UserController {
-  static async register(req: Request, res: Response) {
-    const { fullName, birthDate, email, password } = req.body;
-    const existingUser = await userService.findByEmail(email);
-    if (existingUser) return res.status(400).json({ message: "Email уже существует" });
-
-    const hashed = await hashPassword(password);
-    const user = await userService.create({ fullName, birthDate, email, password: hashed });
-    res.status(201).json(user);
+  static async registration(req: Request, res: Response) {
+    const { 
+        fullName, 
+        birthDate, 
+        email, 
+        password 
+    } = req.body;
+// Проверяем есть ли уже такой email
+    const userExists = await userService.findByEmail(email);
+    if (userExists) return res.status(400).json({ message: "Пользователь с таким email уже существует." });
+// Хешируем пароль
+    const hashedPassword = await hashPassword(password);
+    const newUser = await userService.create({ 
+        fullName, 
+        birthDate, 
+        email, 
+        password: hashedPassword 
+    });
+    res.status(201).json(newUser);
   }
-
+// Авторизация пользователя
   static async login(req: Request, res: Response) {
     const { email, password } = req.body;
+
     const user = await userService.findByEmail(email);
-    if (!user) return res.status(400).json({ message: "Неверный email или пароль" });
+    if (!user) {
+      return res.status(400).json({ message: "Неверный email или пароль." });
+    }
 
-    const valid = await comparePassword(password, user.password);
-    if (!valid) return res.status(400).json({ message: "Неверный email или пароль" });
+    const ok = await comparePassword(password, user.password);
+    if (!ok) {
+      return res.status(400).json({ message: "Неверный email или пароль." });
+    } 
 
-    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET!, { expiresIn: "1h" });
+    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET!, { expiresIn: "1d" });
     res.json({ token });
   }
-
-  static async getUser(req: any, res: Response) {
+// Получение одного пользователя
+  static async getUser(req: any, res: Response) { 
     const { id } = req.params;
-    const user = await userService.findById(Number(id));
-    if (!user) return res.status(404).json({ message: "Пользователь не найден" });
-
+    const user = await userService.findById(id);
+    if (!user) 
+        return res.status(404).json({ message: "Пользователь с таким id найден." });
+//Проверка прав 
     if (req.user.id !== user.id && req.user.role !== "admin")
-      return res.status(403).json({ message: "Нет доступа" });
-
+      return res.status(403).json({ message: "Доступ ограничен." });
     res.json(user);
   }
-
-  static async getUsers(req: any, res: Response) {
-    if (req.user.role !== "admin") return res.status(403).json({ message: "Нет доступа" });
+//Получение всех пользователей
+  static async getAllUsers(req: any, res: Response) {
+    if (req.user.role !== "admin") 
+        return res.status(403).json({ message: "Доступ ограничен." });
     const users = await userService.findAll();
     res.json(users);
   }
-
+// Блокировка пользователя
   static async blockUser(req: any, res: Response) {
     const { id } = req.params;
     if (req.user.id !== Number(id) && req.user.role !== "admin")
-      return res.status(403).json({ message: "Нет доступа" });
+      return res.status(403).json({ message: "Доступ ограничен." });
 
     await userService.updateStatus(Number(id), "inactive");
-    res.json({ message: "Пользователь заблокирован" });
+    res.json({ message: "Пользователь заблокирован." });
   }
 }
